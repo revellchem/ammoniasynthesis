@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ammonia Equilibrium</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument panel. Plots on the left (Maxwell–Boltzmann above, free energy vs log Q below),
+   gauges and controls on the right; stacks to one column on phones. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel2: #f6f8fa; --ink: #14202b; --ink2: #4d5a66; --muted: #7c8792;
+  --line: #d7dde3; --grid: #e6eaee; --accent: #2a78d6;
+  --n2: #4a3aa7; --h2: #1baf7a; --nh3: #eb6834;
+  --cat-none: #7c8792; --cat-fe: #2a78d6; --cat-ru: #d0392c;
+  --yes: #1f8a3b; --yes-bg: #d9f2df; --no: #b3541e; --no-bg: #fbe4d2;
+  --shade: rgba(208,57,44,0.16); --ea: #d0392c;
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161a; --panel: #1b2127; --panel2: #232a31; --ink: #eef1f4; --ink2: #b8c1ca; --muted: #8c97a2;
+  --line: #333c45; --grid: #2a323a; --accent: #5a9cf0;
+  --n2: #9a8cf0; --h2: #2fd19a; --nh3: #ff8a5b;
+  --cat-none: #9aa4ae; --cat-fe: #5a9cf0; --cat-ru: #ff6b5e;
+  --yes: #4fd07a; --yes-bg: #17351f; --no: #ffb27a; --no-bg: #3d2914;
+  --shade: rgba(255,107,94,0.20); --ea: #ff6b5e; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12161a; --panel: #1b2127; --panel2: #232a31; --ink: #eef1f4; --ink2: #b8c1ca; --muted: #8c97a2;
+  --line: #333c45; --grid: #2a323a; --accent: #5a9cf0;
+  --n2: #9a8cf0; --h2: #2fd19a; --nh3: #ff8a5b;
+  --cat-none: #9aa4ae; --cat-fe: #5a9cf0; --cat-ru: #ff6b5e;
+  --yes: #4fd07a; --yes-bg: #17351f; --no: #ffb27a; --no-bg: #3d2914;
+  --shade: rgba(255,107,94,0.20); --ea: #ff6b5e; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.4; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 14px 28px; padding-inline: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+header h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+header h1 span { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 2px; }
+.btn.theme { white-space: nowrap; }
+.eq { font-family: var(--font); font-size: 28px; font-weight: 500; color: var(--ink); letter-spacing: 0.01em; white-space: nowrap; }
+.eq sub { font-size: 16px; }
+@media (max-width: 860px) { .eq { font-size: 22px; } .eq sub { font-size: 13px; } header { flex-wrap: wrap; } }
+.hdr-right { display: flex; align-items: center; gap: 8px; }
+.btn.theme { padding: 6px 10px; font-size: 13px; }
+button { font: inherit; }
+.btn { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.help { width: 34px; height: 34px; border-radius: 50%; font-weight: 600; font-size: 16px; padding: 0; background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* two rows: [MB plot | conditions] over [free-energy plot | pressures | readouts] */
+.grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.6fr) minmax(0, 0.7fr);
+  grid-template-areas: "mb cond cond" "g press read"; }
+#mbPanel { grid-area: mb; } #condPanel { grid-area: cond; } #gPanel { grid-area: g; } #pPanel { grid-area: press; } #rPanel { grid-area: read; }
+@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; grid-template-areas: "mb" "cond" "g" "press" "read"; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 0; display: flex; flex-direction: column; }
+.panel h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 6px; }
+.plotbox { min-height: 0; }
+/* on a wide, reasonably tall screen the whole app fits the viewport without scrolling */
+@media (min-width: 1001px) and (min-height: 620px) {
+  html, body { height: 100%; }
+  .wrap { height: 100%; max-width: 1900px; display: flex; flex-direction: column; padding-block: 10px 10px; }
+  header { margin-bottom: 10px; flex: none; }
+  .grid { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .panel { min-height: 0; overflow: hidden; }
+  .plotbox { flex: 1; }
+  .plotbox svg { width: 100%; height: 100%; }
+  .gauges { flex: 1; min-height: 0; }
+  .gauge { display: flex; flex-direction: column; min-height: 0; }
+  .tube { flex: 1; height: auto; min-height: 60px; }
+}
+
+/* controls */
+.controls { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.ctl { display: grid; grid-template-columns: 96px 1fr 96px; align-items: center; gap: 10px; }
+.ctl label { font-weight: 500; }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); }
+.readout { font-family: var(--mono); font-variant-numeric: tabular-nums; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; text-align: right; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { flex: 1 1 auto; border: 1px solid var(--line); background: var(--panel2); color: var(--ink2); border-radius: 6px; padding: 7px 8px; cursor: pointer; text-align: left; line-height: 1.2; }
+.seg button small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11px; margin-top: 2px; }
+.seg button.on { color: var(--ink); background: var(--panel); border-width: 2px; }
+.seg button.on.none { border-color: var(--cat-none); }
+.seg button.on.fe { border-color: var(--cat-fe); }
+.seg button.on.ru { border-color: var(--cat-ru); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row .spacer { flex: 1; }
+select { font: inherit; background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.check { display: flex; align-items: center; gap: 6px; color: var(--ink2); }
+
+/* gauges */
+.status { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
+.pill { font-weight: 600; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+.pill.yes { background: var(--yes-bg); color: var(--yes); }
+.pill.no { background: var(--no-bg); color: var(--no); }
+.gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gauge { text-align: center; }
+.gauge .name { font-size: 14px; margin-bottom: 4px; }
+.gauge .name sub { font-size: 10px; }
+.gauge .val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; margin-bottom: 6px; }
+.tube { height: 170px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); position: relative; overflow: hidden; margin: 0 auto; width: 80%; }
+.fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; transition: height 0.12s linear; }
+.g-n2 .fill { background: var(--n2); } .g-h2 .fill { background: var(--h2); } .g-nh3 .fill { background: var(--nh3); }
+.gauge .pct { font-size: 12px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+.kv { display: grid; grid-template-columns: 1fr; gap: 2px 12px; font-size: 13px; }
+.kv div:nth-child(even) { margin-bottom: 6px; }
+.kv div:nth-child(odd) { color: var(--muted); }
+.kv div:nth-child(even) { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.actbar { height: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.actbar div { height: 100%; background: var(--h2); }
+
+svg { width: 100%; height: auto; display: block; }
+svg text { font-family: var(--font); fill: var(--ink2); font-size: 11px; }
+svg .mono { font-family: var(--mono); }
+.plot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.plot-head .opts { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--ink2); }
+.fractab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 13px; margin-top: 6px; line-height: 1.3; }
+.fractab div { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+.fractab .lab { font-family: var(--font); color: var(--ink2); }
+.fractab .sel { font-weight: 600; }
+
+/* help overlay */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.overlay.show { display: flex; }
+.sheet { background: var(--panel); color: var(--ink); max-width: 720px; max-height: 88vh; overflow: auto; border-radius: 12px; padding: 20px 22px; border: 1px solid var(--line); }
+.sheet h3 { margin: 14px 0 6px; font-size: 15px; }
+.sheet p, .sheet li { font-size: 13.5px; max-width: 68ch; }
+.sheet code { font-family: var(--mono); font-size: 12.5px; background: var(--panel2); padding: 1px 4px; border-radius: 4px; }
+.foot { margin-top: 12px; color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Ammonia Equilibrium <span>Haber–Bosch synthesis, general chemistry</span></h1>
+    <div class="eq">N<sub>2</sub>(g) + 3 H<sub>2</sub>(g) ⇌ 2 NH<sub>3</sub>(g)</div>
+    <div class="hdr-right">
+      <button class="btn theme" id="themeBtn" aria-label="Switch between light and dark theme">Dark theme</button>
+      <button class="btn help" id="helpBtn" aria-label="Help and model notes">?</button>
+    </div>
+  </header>
+
+  <div class="grid">
+      <section class="panel" id="mbPanel">
+        <div class="plot-head">
+          <h2>Kinetic energy of the molecules (Maxwell–Boltzmann)</h2>
+          <div class="opts">
+            <label class="check"><input type="checkbox" id="logY"> log scale (shows the tail)</label>
+          </div>
+        </div>
+        <div id="mbPlot" class="plotbox"></div>
+        <div class="fractab" id="fracTab"></div>
+      </section>
+      <section class="panel" id="gPanel">
+        <div class="plot-head">
+          <h2>Free energy vs reaction quotient</h2>
+          <div class="opts" id="gNote"></div>
+        </div>
+        <div id="gPlot" class="plotbox"></div>
+      </section>
+
+      <section class="panel" id="condPanel">
+        <h2>Conditions</h2>
+        <div class="controls">
+          <div class="ctl"><label for="tSlider">Temperature</label><input type="range" id="tSlider" min="25" max="600" step="5" value="25"><div class="readout" id="tRead">25 °C</div></div>
+          <div class="ctl"><label for="pSlider">Pressure</label><input type="range" id="pSlider" min="0" max="100" step="1" value="0"><div class="readout" id="pRead">1.0 atm</div></div>
+          <div class="ctl" style="align-items:start"><label>Catalyst</label>
+            <div class="seg" id="catSeg" style="grid-column: 2 / 4">
+              <button class="none" data-cat="none">No catalyst<small>E<sub>a</sub> = 524 kJ/mol</small></button>
+              <button class="fe on" data-cat="fe">Iron<small>E<sub>a</sub> ≈ 70 kJ/mol</small></button>
+              <button class="ru" data-cat="ru">Ruthenium<small>E<sub>a</sub> ≈ 100 kJ/mol</small></button>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" id="addN2">Add N<sub>2</sub></button>
+            <button class="btn" id="addH2">Add H<sub>2</sub></button>
+            <button class="btn" id="rmNH3">Remove NH<sub>3</sub></button>
+            <span class="spacer"></span>
+            <button class="btn" id="pause">Pause</button>
+            <button class="btn" id="reset">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="pPanel">
+        <div class="status"><h2 style="margin:0">Pressures (atm)</h2><div id="eqPill" class="pill no">Equilibrium? No</div></div>
+        <div class="gauges">
+          <div class="gauge g-n2"><div class="name">P<sub>N₂</sub></div><div class="val" id="vN2">0.25</div><div class="tube"><div class="fill" id="fN2"></div></div><div class="pct" id="xN2">25.0 %</div></div>
+          <div class="gauge g-h2"><div class="name">P<sub>H₂</sub></div><div class="val" id="vH2">0.75</div><div class="tube"><div class="fill" id="fH2"></div></div><div class="pct" id="xH2">75.0 %</div></div>
+          <div class="gauge g-nh3"><div class="name">P<sub>NH₃</sub></div><div class="val" id="vNH3">0.00</div><div class="tube"><div class="fill" id="fNH3"></div></div><div class="pct" id="xNH3">0.0 %</div></div>
+        </div>
+      </section>
+
+      <section class="panel" id="rPanel">
+        <h2>Readouts</h2>
+        <div class="kv" id="kv"></div>
+      </section>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="row" style="justify-content:space-between"><strong>How this simulation works</strong><button class="btn" id="closeHelp">Close</button></div>
+    <h3>What you control</h3>
+    <ul>
+      <li><b>Temperature</b> (25–600 °C) changes both the equilibrium constant K<sub>p</sub> and the rate at which the mixture moves toward equilibrium.</li>
+      <li><b>Pressure</b> (1–300 atm, total) does not change K<sub>p</sub>, but compresses the mixture so the reaction quotient Q changes and the mixture shifts toward the side with fewer moles of gas.</li>
+      <li><b>Add N<sub>2</sub> / Add H<sub>2</sub> / Remove NH<sub>3</sub></b> change the amounts in the vessel; the mixture is then out of equilibrium and relaxes back.</li>
+      <li><b>Catalyst</b> sets the activation energy shown on the Maxwell–Boltzmann plot and the speed of the approach to equilibrium. No catalyst: nothing happens on any human time-scale, at any temperature in range.</li>
+      <li>The simulation runs in <b>real time</b>: the "time to reach equilibrium" readout tells you how long the wait will be at the current settings.</li>
+    </ul>
+    <h3>Thermodynamics</h3>
+    <p>ΔH°(T) and ΔS°(T) are computed at every temperature from the NIST-JANAF Shomate functions of N<sub>2</sub>, H<sub>2</sub> and NH<sub>3</sub>; K<sub>p</sub> = exp(−ΔG°/RT) with the 1 atm standard state used by the gauges. At 25 °C K<sub>p</sub> ≈ 5.6×10<sup>5</sup>; at 450 °C ≈ 5×10<sup>−5</sup>. The lower plot is the free energy of the whole mixture at fixed T and P as the reaction proceeds, drawn against log Q; its minimum is at log K<sub>p</sub>, and the marker shows where the vessel is now.</p>
+    <h3>Kinetics</h3>
+    <p>The vessel relaxes toward its equilibrium composition with a first-order rate constant <code>k(T) = k<sub>ref</sub>·exp[−(E<sub>a</sub>/R)(1/T − 1/723 K)]</code>. Iron (promoted magnetite, the Haber–Bosch catalyst) is calibrated so that 95 % of the approach takes 20 s at 450 °C, a realistic converter residence time; its apparent activation energy of ≈70 kJ/mol comes from Temkin–Pyzhev and Somorjai's Fe(111) measurements. Ruthenium (Cs–Ru/MgO type) uses the literature apparent E<sub>a</sub> ≈ 100 kJ/mol and is set 10× faster than iron at 450 °C, matching the 10–20× activity advantage reported for industrial Ru catalysts. "No catalyst" uses the computed gas-phase barrier of 524 kJ/mol (N<sub>2</sub> + H<sub>2</sub> → NNH<sub>2</sub>, Hwang & Mebel 2003); no homogeneous rate has ever been measured.</p>
+    <p>The Maxwell–Boltzmann curve is the true distribution of molecular kinetic energies at the set temperature. On a linear scale the fraction of molecules above 70 kJ/mol is invisible (about 1 in 10<sup>5</sup> at 450 °C); switch on the log scale to see the tail and how it grows with temperature. The table under the plot gives the exact fraction for each activation energy.</p>
+    <h3>Sources</h3>
+    <p>Chase, NIST-JANAF Thermochemical Tables (1998); Larson &amp; Dodge, JACS 1923; Larson, JACS 1924; Temkin &amp; Pyzhev 1940; Dyson &amp; Simon, Ind. Eng. Chem. Fundam. 1968; Spencer, Schoonmaker &amp; Somorjai, J. Catal. 1982; Kitano et al., Nat. Commun. 2015; Hwang &amp; Mebel, J. Phys. Chem. A 2003; Appl, Ullmann's Encyclopedia 2011. Full reference lists are in the project's literature folder.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const R = 8.314462618, BAR_PER_ATM = 1.01325, T_REF = 723.15;
+  // ---------- thermodynamics (NIST-JANAF Shomate fits) ----------
+  const SH = {
+    N2: [[100, 500, 28.98641, 1.853978, -9.647459, 16.63537, 0.000117, -8.671914, 226.4168, 0.0],
+         [500, 2000, 19.50583, 19.88705, -8.598535, 1.369784, 0.527601, -4.935202, 212.3900, 0.0]],
+    H2: [[298, 1000, 33.066178, -11.363417, 11.432816, -2.772874, -0.158558, -9.980797, 172.707974, 0.0],
+         [1000, 2500, 18.563083, 12.257357, -2.859786, 0.268238, 1.977990, -1.147438, 156.288133, 0.0]],
+    NH3: [[298, 1400, 19.99563, 49.77119, -15.37599, 1.921168, 0.189174, -53.30667, 203.8591, -45.89806],
+          [1400, 6000, 52.02427, 18.48801, -3.765128, 0.248541, -12.45799, -85.53895, 223.8022, -45.89806]]
+  };
+  const DFH = { N2: 0, H2: 0, NH3: -45.89806 };
+  function shomate(sp, T) {
+    const sets = SH[sp]; let c = sets[sets.length - 1];
+    for (const s of sets) if (T <= s[1]) { c = s; break; }
+    const [, , A, B, C, D, E, F, G, H] = c, t = T / 1000;
+    const h = A * t + B * t * t / 2 + C * t ** 3 / 3 + D * t ** 4 / 4 - E / t + F - H;
+    const s = A * Math.log(t) + B * t + C * t * t / 2 + D * t ** 3 / 3 - E / (2 * t * t) + G;
+    return { h, s };
+  }
+  function thermo(T) {
+    const n = shomate("N2", T), h = shomate("H2", T), a = shomate("NH3", T);
+    const dH = 2 * (DFH.NH3 + a.h) - n.h - 3 * h.h;           // kJ/mol
+    const dS = 2 * a.s - n.s - 3 * h.s;                       // J/mol K
+    const dG = dH - T * dS / 1000;                            // kJ/mol (1 bar)
+    const KpBar = Math.exp(-dG * 1000 / (R * T));
+    const KpAtm = KpBar * BAR_PER_ATM * BAR_PER_ATM;
+    return { dH, dS, dG, KpBar, KpAtm, logK: Math.log10(KpAtm) };
+  }
+  // ---------- catalysts ----------
+  const CATS = {
+    none: { name: "No catalyst", Ea: 524, t95ref: 20, color: "var(--cat-none)" },
+    fe:   { name: "Iron (promoted Fe₃O₄)", Ea: 70, t95ref: 20, color: "var(--cat-fe)" },
+    ru:   { name: "Ruthenium (Cs–Ru/MgO)", Ea: 100, t95ref: 2, color: "var(--cat-ru)" }
+  };
+  function kRate(cat, T) {
+    const c = CATS[cat];
+    return Math.log(20) / c.t95ref * Math.exp(-c.Ea * 1000 / R * (1 / T - 1 / T_REF));
+  }
+  // ---------- state ----------
+  const P_MIN = 1, P_MAX = 300;
+  const state = { TC: 25, P: 1, cat: "fe", n: { N: 1, H: 3, A: 0 }, paused: false, act: 1, simT: 0, logY: false };
+  const $ = id => document.getElementById(id);
+  function pFromSlider(v) { return P_MIN * Math.pow(P_MAX / P_MIN, v / 100); }
+
+  // ---------- equilibrium algebra ----------
+  function comp(n, xi) { return { N: n.N - xi, H: n.H - 3 * xi, A: n.A + 2 * xi }; }
+  function partial(c, P) { const tot = c.N + c.H + c.A; return { pN: P * c.N / tot, pH: P * c.H / tot, pA: P * c.A / tot, tot }; }
+  function logQ(c, P) {
+    const { pN, pH, pA } = partial(c, P);
+    if (pA <= 0) return -Infinity; if (pN <= 0 || pH <= 0) return Infinity;
+    return 2 * Math.log10(pA) - Math.log10(pN) - 3 * Math.log10(pH);
+  }
+  function xiBounds(n) { return [-n.A / 2, Math.min(n.N, n.H / 3)]; }
+  function solveXi(n, P, target) {              // xi such that logQ = target (monotonic in xi)
+    let [lo, hi] = xiBounds(n);
+    for (let i = 0; i < 80; i++) { const m = 0.5 * (lo + hi); if (logQ(comp(n, m), P) < target) lo = m; else hi = m; }
+    return 0.5 * (lo + hi);
+  }
+  function gibbs(c, P, T, muA) {                // kJ for the vessel, ideal gas, 1 atm standard state
+    const { pN, pH, pA } = partial(c, P); const RT = R * T / 1000; let g = 0;
+    if (c.N > 1e-15) g += c.N * RT * Math.log(pN);
+    if (c.H > 1e-15) g += c.H * RT * Math.log(pH);
+    if (c.A > 1e-15) g += c.A * (muA + RT * Math.log(pA));
+    return g;
+  }
+  // ---------- Maxwell–Boltzmann ----------
+  function fE(E, RT) { return 2 * Math.sqrt(E / Math.PI) * Math.pow(RT, -1.5) * Math.exp(-E / RT); }   // per kJ/mol
+  function erfc(x) { const z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+    const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+    return x >= 0 ? r : 2 - r; }
+  function fracAbove(Ea, RT) { const x = Ea / RT; return erfc(Math.sqrt(x)) + 2 * Math.sqrt(x / Math.PI) * Math.exp(-x); }
+  function fmtFrac(f) {
+    if (f >= 0.01) return (100 * f).toFixed(1) + " %";
+    const e = Math.floor(Math.log10(f)); const m = f / Math.pow(10, e);
+    return "1 in " + (10 / m).toFixed(1).replace(/\.0$/, "") + "×10^" + (-e - 1);
+  }
+  function fmtTime(s) {
+    if (!isFinite(s)) return "never"; if (s < 1) return s.toFixed(2) + " s"; if (s < 90) return s.toFixed(1) + " s";
+    if (s < 5400) return (s / 60).toFixed(1) + " min"; if (s < 172800) return (s / 3600).toFixed(1) + " h";
+    if (s < 3.156e7 * 2) return (s / 86400).toFixed(1) + " days";
+    const y = s / 3.156e7; return y < 1e6 ? y.toFixed(0) + " years" : y.toExponential(1) + " years";
+  }
+  function fmtK(k) { const e = Math.floor(Math.log10(k)), m = k / Math.pow(10, e); return m.toFixed(2) + "×10^" + e; }
+  function fmtP(p) { return p >= 100 ? p.toFixed(0) : p >= 10 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(3); }
+  const sup = s => s.replace(/\^(-?\d+)/g, "<sup>$1</sup>");
+  const supSvg = s => s.replace(/\^(-?\d+)/g, '<tspan baseline-shift="super" font-size="8">$1</tspan>');
+
+  // ---------- plots ----------
+  const W = 560, HGT = 262, ML = 52, MR = 16, MT = 14, MB = 48;
+  const PW = W - ML - MR, PH = HGT - MT - MB;
+  function drawMB() {
+    const T = state.TC + 273.15, RT = R * T / 1000;
+    const Emax = 160, log = state.logY, yLo = 1e-14, yHi = 1;
+    const ymaxLin = 0.21;
+    const X = E => ML + PW * E / Emax;
+    const Y = v => log ? MT + PH * (1 - (Math.log10(Math.max(v, yLo)) - Math.log10(yLo)) / (Math.log10(yHi) - Math.log10(yLo)))
+                       : MT + PH * (1 - Math.min(v, ymaxLin) / ymaxLin);
+    let s = `<svg viewBox="0 0 ${W} ${HGT}" role="img" aria-label="Maxwell-Boltzmann distribution of molecular kinetic energies at ${state.TC} °C">`;
+    // grid + axes
+    for (let E = 0; E <= Emax; E += 20) { s += `<line x1="${X(E)}" y1="${MT}" x2="${X(E)}" y2="${MT + PH}" stroke="var(--grid)"/>`;
+      s += `<text x="${X(E)}" y="${MT + PH + 14}" text-anchor="middle" class="mono">${E}</text>`; }
+    if (log) for (let e = -14; e <= 0; e += 2) { const y = Y(Math.pow(10, e)); s += `<line x1="${ML}" y1="${y}" x2="${ML + PW}" y2="${y}" stroke="var(--grid)"/><text x="${ML - 6}" y="${y + 4}" text-anchor="end" class="mono">10<tspan baseline-shift="super" font-size="8">${e}</tspan></text>`; }
+    else for (let v = 0; v <= ymaxLin; v += 0.05) { const y = Y(v); s += `<line x1="${ML}" y1="${y}" x2="${ML + PW}" y2="${y}" stroke="var(--grid)"/><text x="${ML - 6}" y="${y + 4}" text-anchor="end" class="mono">${v.toFixed(2)}</text>`; }
+    s += `<line x1="${ML}" y1="${MT + PH}" x2="${ML + PW}" y2="${MT + PH}" stroke="var(--line)"/><line x1="${ML}" y1="${MT}" x2="${ML}" y2="${MT + PH}" stroke="var(--line)"/>`;
+    s += `<text x="${ML + PW / 2}" y="${HGT - 4}" text-anchor="middle">Kinetic energy (kJ/mol)</text>`;
+    s += `<text transform="translate(12 ${MT + PH / 2}) rotate(-90)" text-anchor="middle">Fraction of molecules${log ? " (log)" : ""}</text>`;
+    // shaded region above selected Ea
+    const Ea = CATS[state.cat].Ea;
+    const pts = [], shade = [];
+    for (let i = 0; i <= 320; i++) { const E = Emax * i / 320; const v = fE(Math.max(E, 1e-9), RT); pts.push([X(E), Y(v)]); if (E >= Ea) shade.push([X(E), Y(v)]); }
+    if (shade.length) s += `<path d="M${shade[0][0]},${MT + PH} ` + shade.map(p => `L${p[0]},${p[1]}`).join(" ") + ` L${ML + PW},${MT + PH} Z" fill="var(--shade)"/>`;
+    s += `<path d="M` + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" L") + `" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    // reference curve at 25 C for comparison when T > 25
+    if (state.TC > 25) { const RT0 = R * 298.15 / 1000; const p0 = []; for (let i = 0; i <= 320; i++) { const E = Emax * i / 320; p0.push([X(E), Y(fE(Math.max(E, 1e-9), RT0))]); }
+      s += `<path d="M` + p0.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" L") + `" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>`;
+      s += `<text x="${X(22)}" y="${MT + 12}" fill="var(--muted)">dashed: 25 °C for comparison</text>`; }
+    // Ea marker for the selected catalyst only
+    {
+      const c = CATS[state.cat]; const col = "var(--ea)"; const onScale = c.Ea <= Emax; const x = onScale ? X(c.Ea) : ML + PW - 2;
+      s += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT + PH}" stroke="${col}" stroke-width="2.4" stroke-dasharray="2 4" stroke-linecap="round"/>`;
+      const lab = onScale ? `E<tspan font-size="8" baseline-shift="sub">a</tspan> = ${c.Ea} kJ/mol` : `E<tspan font-size="8" baseline-shift="sub">a</tspan> = ${c.Ea} kJ/mol → (off scale)`;
+      s += `<text x="${onScale ? x + 5 : x - 5}" y="${MT + 30}" text-anchor="${onScale ? "start" : "end"}" fill="${col}" font-weight="600">${lab}</text>`;
+    }
+    s += `<text x="${ML + PW - 6}" y="${MT + PH - 8}" text-anchor="end" fill="var(--ink)" font-weight="600">${state.TC} °C</text>`;
+    s += `</svg>`;
+    $("mbPlot").innerHTML = s;
+    // fraction readout for the selected catalyst
+    const c = CATS[state.cat];
+    $("fracTab").innerHTML = `<div class="lab">Fraction of molecules with energy ≥ E<sub>a</sub> at ${state.TC} °C:</div><div class="sel" style="color:var(--ea)">${sup(fmtFrac(fracAbove(c.Ea, RT)))}</div>`;
+  }
+
+  let gCurve = null;   // cached curve for (T, P, inventory)
+  function gCurveKey() { const n = state.n; return [state.TC, state.P.toFixed(4), (n.N + n.A / 2).toFixed(6), (n.H + 1.5 * n.A).toFixed(6)].join("|"); }
+  function buildGCurve(th) {
+    const T = state.TC + 273.15, P = state.P, muA = th.dG / 2;   // kJ/mol, ΔfG°(NH3) at 1 bar ≈ at 1 atm within 0.1 kJ
+    const base = { N: state.n.N + state.n.A / 2, H: state.n.H + 1.5 * state.n.A, A: 0 };
+    const pts = [];
+    for (let lq = -6; lq <= 6.0001; lq += 0.1) { const xi = solveXi(base, P, lq); pts.push([lq, gibbs(comp(base, xi), P, T, muA)]); }
+    const gmin = gibbs(comp(base, solveXi(base, P, th.logK)), P, T, muA);
+    return { pts, gmin, base, muA, T };
+  }
+  function drawG(th) {
+    const key = gCurveKey(); if (!gCurve || gCurve.key !== key) { gCurve = buildGCurve(th); gCurve.key = key; }
+    const { pts, gmin, muA, T } = gCurve; const P = state.P;
+    const lo = -6, hi = 6; const X = lq => ML + PW * (Math.min(Math.max(lq, lo), hi) - lo) / (hi - lo);
+    const rel = pts.map(p => p[1] - gmin);
+    // y-scale: show the bowl within ±3 decades of K; anything higher runs off the top of the plot
+    let ymax = 0; pts.forEach((p, i) => { if (Math.abs(p[0] - th.logK) <= 3 && isFinite(rel[i])) ymax = Math.max(ymax, rel[i]); });
+    ymax = ymax * 1.15 || 1;
+    const Y = g => MT + PH * (1 - Math.min(Math.max(g, 0), ymax) / ymax);
+    let s = `<svg viewBox="0 0 ${W} ${HGT}" role="img" aria-label="Free energy of the mixture versus log Q">`;
+    for (let lq = lo; lq <= hi; lq += 2) { s += `<line x1="${X(lq)}" y1="${MT}" x2="${X(lq)}" y2="${MT + PH}" stroke="var(--grid)"/><text x="${X(lq)}" y="${MT + PH + 14}" text-anchor="middle" class="mono">${lq}</text>`; }
+    s += `<text x="${X(lo)}" y="${MT + PH + 27}" text-anchor="middle" fill="var(--muted)">reactants</text><text x="${X(hi)}" y="${MT + PH + 27}" text-anchor="middle" fill="var(--muted)">products</text>`;
+    s += `<line x1="${ML}" y1="${MT + PH}" x2="${ML + PW}" y2="${MT + PH}" stroke="var(--line)"/><line x1="${ML}" y1="${MT}" x2="${ML}" y2="${MT + PH}" stroke="var(--line)"/>`;
+    s += `<text x="${ML + PW / 2}" y="${HGT - 4}" text-anchor="middle">Reaction quotient, log Q</text>`;
+    s += `<text transform="translate(12 ${MT + PH / 2}) rotate(-90)" text-anchor="middle">Free energy of mixture (kJ, relative)</text>`;
+    // curve, broken wherever it runs above the plot
+    let d = "", pen = false;
+    pts.forEach((p, i) => { const g = rel[i]; if (!isFinite(g) || g > ymax) { pen = false; return; }
+      d += (pen ? " L" : " M") + X(p[0]).toFixed(1) + "," + Y(g).toFixed(1); pen = true; });
+    s += `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    // minimum = K
+    const xk = X(th.logK);
+    s += `<line x1="${xk}" y1="${MT}" x2="${xk}" y2="${MT + PH}" stroke="var(--nh3)" stroke-dasharray="4 3"/>`;
+    s += `<text x="${xk + (th.logK > 3 ? -6 : 6)}" y="${MT + 14}" text-anchor="${th.logK > 3 ? "end" : "start"}" fill="var(--nh3)" font-weight="600">K<tspan font-size="8" baseline-shift="sub">p</tspan> = ${supSvg(fmtK(th.KpAtm))}  (log K = ${th.logK.toFixed(2)})</text>`;
+    // current Q marker
+    const lq = logQ(state.n, P); const gnow = gibbs(state.n, P, T, muA) - gmin;
+    const off = !(lq >= lo && lq <= hi);
+    const xq = X(isFinite(lq) ? lq : (lq < 0 ? lo : hi)), yq = Y(gnow);
+    s += `<circle cx="${xq}" cy="${yq}" r="7" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.2"/>`;
+    const qlab = !isFinite(lq) ? "Q = 0 (no NH₃ yet)" : off ? `Q off scale ${lq < 0 ? "←" : "→"} (log Q = ${lq.toFixed(1)})` : `Q (log Q = ${lq.toFixed(2)})`;
+    const left = xq > ML + PW * 0.6;
+    s += `<text x="${xq + (left ? -12 : 12)}" y="${Math.max(yq - 10, MT + 28)}" text-anchor="${left ? "end" : "start"}" fill="var(--ink)" font-weight="600">${qlab}</text>`;
+    s += `</svg>`;
+    $("gPlot").innerHTML = s;
+    $("gNote").textContent = `ΔG° = ${th.dG >= 0 ? "+" : ""}${th.dG.toFixed(1)} kJ/mol at ${state.TC} °C · ΔH° = ${th.dH.toFixed(1)} kJ/mol`;
+  }
+
+  // ---------- UI ----------
+  function updateGauges(th) {
+    const { pN, pH, pA, tot } = partial(state.n, state.P);
+    $("vN2").textContent = fmtP(pN); $("vH2").textContent = fmtP(pH); $("vNH3").textContent = fmtP(pA);
+    $("fN2").style.height = (100 * pN / state.P) + "%"; $("fH2").style.height = (100 * pH / state.P) + "%"; $("fNH3").style.height = (100 * pA / state.P) + "%";
+    $("xN2").textContent = (100 * pN / state.P).toFixed(1) + " %"; $("xH2").textContent = (100 * pH / state.P).toFixed(1) + " %"; $("xNH3").textContent = (100 * pA / state.P).toFixed(1) + " %";
+    const lq = logQ(state.n, state.P); const d = lq - th.logK; const atEq = Math.abs(d) < 0.01;
+    const pill = $("eqPill"); pill.className = "pill " + (atEq ? "yes" : "no");
+    pill.textContent = atEq ? "Equilibrium? Yes" : ("Equilibrium? No " + (d < 0 ? "(shifting →)" : "(shifting ←)"));
+    const T = state.TC + 273.15; const k = kRate(state.cat, T) * state.act; const t95 = Math.log(20) / k;
+    const kv = [
+      ["K<sub>p</sub>", sup(fmtK(th.KpAtm))],
+      ["Q<sub>p</sub>", isFinite(lq) ? sup(fmtK(Math.pow(10, lq))) : "0"],
+      ["NH<sub>3</sub> now / at equilibrium", (100 * pA / state.P).toFixed(1) + " % / " + (100 * eqFrac()).toFixed(1) + " %"],
+      ["Time to reach equilibrium", fmtTime(t95) + (state.paused ? " (paused)" : "")],
+    ];
+    $("kv").innerHTML = kv.map(r => `<div>${r[0]}</div><div>${r[1]}</div>`).join("");
+  }
+  function eqFrac() { const th = thermo(state.TC + 273.15); const xi = solveXi(state.n, state.P, th.logK); const c = comp(state.n, xi); return c.A / (c.N + c.H + c.A); }
+  function redrawAll() { const th = thermo(state.TC + 273.15); drawMB(); drawG(th); updateGauges(th); }
+  function redrawFast() { const th = thermo(state.TC + 273.15); drawG(th); updateGauges(th); }
+
+  // ---------- simulation loop ----------
+  let last = null;
+  function step(now) {
+    if (last === null) last = now;
+    const dtReal = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!state.paused) {
+      const dt = dtReal; state.simT += dt;
+      const T = state.TC + 273.15, th = thermo(T);
+      const k = kRate(state.cat, T) * state.act;
+      const xiEq = solveXi(state.n, state.P, th.logK);
+      const f = 1 - Math.exp(-k * dt);
+      if (f > 1e-12) state.n = comp(state.n, xiEq * f);
+      redrawFast();
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ---------- wiring ----------
+  $("tSlider").addEventListener("input", e => { state.TC = +e.target.value; $("tRead").textContent = state.TC + " °C"; redrawAll(); });
+  $("pSlider").addEventListener("input", e => { state.P = pFromSlider(+e.target.value); $("pRead").textContent = fmtP(state.P) + " atm"; redrawAll(); });
+  $("catSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.cat = b.dataset.cat;
+    for (const x of $("catSeg").querySelectorAll("button")) x.classList.toggle("on", x === b); redrawAll(); });
+  $("addN2").addEventListener("click", () => { state.n.N += 0.5; redrawAll(); });
+  $("addH2").addEventListener("click", () => { state.n.H += 1.5; redrawAll(); });
+  $("rmNH3").addEventListener("click", () => { state.n.A *= 0.5; redrawAll(); });
+  $("reset").addEventListener("click", () => { state.n = { N: 1, H: 3, A: 0 }; state.simT = 0; redrawAll(); });
+  $("pause").addEventListener("click", () => { state.paused = !state.paused; $("pause").textContent = state.paused ? "Resume" : "Pause"; redrawFast(); });
+  // theme toggle (explicit choice wins over the OS setting; remembered per browser when storage allows)
+  function applyTheme(mode) {
+    const root = document.documentElement;
+    if (mode === "dark" || mode === "light") root.setAttribute("data-theme", mode); else root.removeAttribute("data-theme");
+    const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    $("themeBtn").textContent = dark ? "Light theme" : "Dark theme";
+    try { localStorage.setItem("haber-theme", mode); } catch (e) {}
+  }
+  $("themeBtn").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const dark = cur === "dark" || (!cur && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    applyTheme(dark ? "light" : "dark");
+  });
+  let saved = null; try { saved = localStorage.getItem("haber-theme"); } catch (e) {}
+  applyTheme(saved);
+  $("logY").addEventListener("change", e => { state.logY = e.target.checked; drawMB(); });
+  $("helpBtn").addEventListener("click", () => $("overlay").classList.add("show"));
+  $("closeHelp").addEventListener("click", () => $("overlay").classList.remove("show"));
+  $("overlay").addEventListener("click", e => { if (e.target === $("overlay")) $("overlay").classList.remove("show"); });
+
+  redrawAll();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
